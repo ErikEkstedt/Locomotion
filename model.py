@@ -23,21 +23,24 @@ class Model(nn.Module):
         return self.out(x)
 
 
-# ------------------
-def testing():
-    batch_size=32
-    seq_len = 5
-    joints = 63
-    x = torch.rand(batch_size, seq_len, joints)
+class MLP(nn.Module):
+    def __init__(self,
+                 in_size=126,
+                 hidden=128,
+                 out_size=63):
+        super(MLP, self).__init__()
+        self.fc1 = nn.Linear(in_size, hidden)
+        self.fc2 = nn.Linear(hidden, hidden)
+        self.fc3 = nn.Linear(hidden, hidden)
+        self.out = nn.Linear(hidden, out_size)
 
-    in_channels = seq_len
-    out_channels = 10
-    kernel_size = 5
-    stride = 2
-    m = nn.Conv1d(in_channels, out_channels, kernel_size, stride)
+        self.activation = F.elu
 
-    out = m(x)
+    def forward(self, x):
+        bs = x.shape[0]
+        x = x.reshape(bs, -1)
+        x = self.activation(self.fc1(x))
+        x = self.activation(self.fc2(x))
+        x = self.activation(self.fc3(x))
+        return self.out(x).reshape(bs, -1)
 
-
-if __name__ == "__main__":
-    testing()

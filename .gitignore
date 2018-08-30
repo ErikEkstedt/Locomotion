@@ -1,2 +1,3 @@
 mocap/data/*
 __pycache*
+.ipynb*
