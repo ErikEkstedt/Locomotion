@@ -252,11 +252,12 @@ if __name__ == "__main__":
     from torchvision.utils import make_grid
 
     import numpy as np
-    import matplotlib.pyplot as plt
+    from tensorboardX import SummaryWriter
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    print('Running on {} device'.format(device))
 
-    batch_size = 32
+    batch_size = 128
     num_training_updates = 25000
     num_hiddens = 128
     num_residual_hiddens = 32
@@ -267,6 +268,8 @@ if __name__ == "__main__":
     decay = 0.99
     learning_rate = 3e-4
 
+    # Tensorboard
+    writer = SummaryWriter()
 
     # Load data
     training_data = datasets.CIFAR10(root="data", train=True, download=True,
@@ -295,10 +298,8 @@ if __name__ == "__main__":
     data_variance = np.var(training_data.train_data / 255.0)
     print('data variance: ', data_variance)
 
-
-
     model = Model(num_hiddens, num_residual_layers, num_residual_hiddens,
-                  num_embeddings, embedding_dim, 
+                  num_embeddings, embedding_dim,
                   commitment_cost, decay).to(device)
 
     optimizer = optim.Adam(model.parameters(), lr=learning_rate, amsgrad=True)
@@ -307,8 +308,10 @@ if __name__ == "__main__":
     train_res_recon_error = []
     train_res_perplexity = []
 
-    for i, (data, _) in enumerate(training_loader):
-        # (data, _) = next(iter(training_loader))
+    from tqdm import trange
+    for i in trange(num_training_updates):
+        # for i, (data, _) in enumerate(training_loader):
+        (data, _) = next(iter(training_loader))
         data = data.to(device)
         optimizer.zero_grad()
 
@@ -318,31 +321,8 @@ if __name__ == "__main__":
         loss.backward()
 
         optimizer.step()
+        writer.add_scalar('Loss', loss.item(), i)
+        writer.add_scalar('Reconstruction Error', recon_error.item(), i)
+        writer.add_scalar('Perplexity', perplexity.item(), i)
 
-        train_res_recon_error.append(recon_error.item())
-        train_res_perplexity.append(perplexity.item())
-
-        if (i+1) % 100 == 0:
-            print('%d iterations' % (i+1))
-            print('recon_error: %.3f' % np.mean(train_res_recon_error[-100:]))
-            print('perplexity: %.3f' % np.mean(train_res_perplexity[-100:]))
-            print()
-
-
-    train_res_recon_error_smooth = savgol_filter(train_res_recon_error, 201, 7)
-    train_res_perplexity_smooth = savgol_filter(train_res_perplexity, 201, 7)
-
-
-
-    f = plt.figure(figsize=(16,8))
-    ax = f.add_subplot(1,2,1)
-    ax.plot(train_res_recon_error_smooth)
-    ax.set_yscale('log')
-    ax.set_title('Smoothed NMSE.')
-    ax.set_xlabel('iteration')
-
-    ax = f.add_subplot(1,2,2)
-    ax.plot(train_res_perplexity_smooth)
-    ax.set_title('Smoothed Average codebook usage (perplexity).')
-    ax.set_xlabel('iteration')
-
+    torch.save(model, 'model.pt')
