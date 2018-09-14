@@ -10,6 +10,7 @@ from tqdm import tqdm
 
 writer = SummaryWriter()
 
+num_epochs = 100
 batch_size = 32
 in_channels = 1
 out_channels = in_channels
@@ -51,19 +52,22 @@ loss_function = nn.MSELoss()
 # train_data_var = train_data.var(dim=1).mean(dim=0).pow(2)
 # train_data_standard = (train_data-train_data_mean)/train_data_var
 
-# for i in trange(num_training_updates):
-#     batch = next(iter(train_loader))
-for i, batch in enumerate(tqdm(train_loader)):
-    j, c = batch['coord'], batch['ctrl']  # (Bx240x63), (B, 240, 3)
-    data = torch.cat((j,c), dim=2).to(device)
-    data = data.unsqueeze(1)  # Add dummy "image" channel
-    optimizer.zero_grad()
-    vq_loss, data_recon, perplexity = model(data)
-    recon_error = torch.mean((data_recon - data)**2)
-    loss = recon_error + vq_loss
-    loss.backward()
-    optimizer.step()
-    writer.add_scalar('Loss', loss.item(), i)
-    writer.add_scalar('Reconstruction Error', recon_error.item(), i)
-    writer.add_scalar('Perplexity', perplexity.item(), i)
-torch.save(model, 'model.pt')
+
+for epoch in range(1, num_epochs+1):
+    epoch_loss = 0
+    for i, batch in enumerate(tqdm(train_loader)):
+        j, c = batch['coord'], batch['ctrl']  # (Bx240x63), (B, 240, 3)
+        data = torch.cat((j,c), dim=2).to(device)
+        data = data.unsqueeze(1)  # Add dummy "image" channel
+        optimizer.zero_grad()
+        vq_loss, data_recon, perplexity = model(data)
+        recon_error = torch.mean((data_recon - data)**2)
+        loss = recon_error + vq_loss
+        loss.backward()
+        optimizer.step()
+        epoch_loss += loss.item()
+        writer.add_scalar('Loss', loss.item(), i)
+        writer.add_scalar('Reconstruction Error', recon_error.item(), i)
+        writer.add_scalar('Perplexity', perplexity.item(), i)
+    writer.add_scalar('Epoch Loss', epoch_loss.item(), i)
+    torch.save('checkpoints/model_epoch_{}_loss_{}.pt'.format(epoch, epoch_loss.item()), model)
