@@ -53,8 +53,12 @@ loss_function = nn.MSELoss()
 # train_data_standard = (train_data-train_data_mean)/train_data_var
 
 
+model.train()
+k = 0
 for epoch in range(1, num_epochs+1):
     epoch_loss = 0
+    print('{}/{}'.format(epoch, num_epochs))
+    model.to(device)
     for i, batch in enumerate(tqdm(train_loader)):
         j, c = batch['coord'], batch['ctrl']  # (Bx240x63), (B, 240, 3)
         data = torch.cat((j,c), dim=2).to(device)
@@ -66,8 +70,10 @@ for epoch in range(1, num_epochs+1):
         loss.backward()
         optimizer.step()
         epoch_loss += loss.item()
-        writer.add_scalar('Loss', loss.item(), i)
-        writer.add_scalar('Reconstruction Error', recon_error.item(), i)
-        writer.add_scalar('Perplexity', perplexity.item(), i)
-    writer.add_scalar('Epoch Loss', epoch_loss.item(), i)
-    torch.save('checkpoints/model_epoch_{}_loss_{}.pt'.format(epoch, epoch_loss.item()), model)
+        writer.add_scalar('Loss', loss.item(), k)
+        writer.add_scalar('Reconstruction Error', recon_error.item(), k)
+        writer.add_scalar('Perplexity', perplexity.item(), k)
+        k += 1
+
+    writer.add_scalar('Epoch Loss', epoch_loss, epoch)
+    torch.save(model.cpu(), 'checkpoints/model_epoch_{}_loss_{}.pt'.format(epoch, epoch_loss))
