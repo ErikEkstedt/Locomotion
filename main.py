@@ -3,50 +3,67 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.autograd import Variable
 import torch.nn.functional as F
-
 from dataset import MocapDataset, get_dataloaders
-from model import MLP
+from models.vq_vae import Model
+from tensorboardX import SummaryWriter
+from tqdm import tqdm
 
+writer = SummaryWriter()
+
+batch_size = 32
+in_channels = 1
+out_channels = in_channels
+num_training_updates = 25000
+num_hiddens = 128
+num_residual_hiddens = 32
+num_residual_layers = 2
+embedding_dim = 64
+num_embeddings = 512
+commitment_cost = 0.25
+decay = 0.99
+learning_rate = 3e-4
+
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 # dset = MocapDataset()
 
-train_loader, test_loader = get_dataloaders()
+train_loader, test_loader = get_dataloaders(batch_size=batch_size)
 
 print('There are {} minibatches with {} batch_size in one epoch'.format(len(train_loader), train_loader.batch_size))
 
-model = MLP(in_size=126, hidden=128, out_size=63)
-optimizer =  optim.Adam(model.parameters(), lr=1e-4)
+model = Model(in_channels,
+              out_channels,
+              num_hiddens=128,
+              num_residual_layers=32,
+              num_residual_hiddens=2,
+              embedding_dim=64,
+              num_embeddings=512,
+              commitment_cost=commitment_cost,
+              decay=decay).to(device)
+optimizer = optim.Adam(model.parameters(), lr=learning_rate, amsgrad=True)
 loss_function = nn.MSELoss()
 
-n_epochs = 10 
-for epoch in range(1, n_epochs +1):
-    epoch_loss = 0
-    for d in tqdm(train_loader):
-        j_T, c_T = d['j_pos'], d['ctrl']
-        batch_size = j.shape[0]
-        T = j_T.shape[1]
-        j_prev = j_T[:, 0, :]
-        c_prev = c_T[:, 0, :]
-        batch_loss = 0
-        for t in range(1, T-1):
-            j_current = j_T[:, t, :]
-            c_current = c_T[:, t, :]
-            j_target = j_T[:, t+1, :]
-            j = torch.stack((j_current, j_prev), dim=1)
-            c = torch.stack((c_current, c_prev), dim=1)
-            out = model(j)
-            loss = loss_function(out, j_target)
-            optimizer.zero_grad()
-            loss.backward()
-            optimizer.step()
-            j_prev = j_current
-            c_prev = c_current
-            batch_loss += loss.item()
-        epoch_loss += batch_loss
-    print('Epoch {}/{} loss: {}'.format(epoch, n_epochs, epoch_loss ))
+# Data variance for normalizing
+# train_data.shape
+# torch.Size([1835, 240, 66])
+# train_data = train_loader.dataset.data  # torch.size([1
+# train_data_mean = train_data.mean(dim=1).mean(dim=0)
+# train_data_var = train_data.var(dim=1).mean(dim=0).pow(2)
+# train_data_standard = (train_data-train_data_mean)/train_data_var
 
-
-
-
-
-
+# for i in trange(num_training_updates):
+#     batch = next(iter(train_loader))
+for i, batch in enumerate(tqdm(train_loader)):
+    j, c = batch['coord'], batch['ctrl']  # (Bx240x63), (B, 240, 3)
+    data = torch.cat((j,c), dim=2).to(device)
+    data = data.unsqueeze(1)  # Add dummy "image" channel
+    optimizer.zero_grad()
+    vq_loss, data_recon, perplexity = model(data)
+    recon_error = torch.mean((data_recon - data)**2)
+    loss = recon_error + vq_loss
+    loss.backward()
+    optimizer.step()
+    writer.add_scalar('Loss', loss.item(), i)
+    writer.add_scalar('Reconstruction Error', recon_error.item(), i)
+    writer.add_scalar('Perplexity', perplexity.item(), i)
+torch.save(model, 'model.pt')

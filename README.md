@@ -54,6 +54,8 @@ There are several way to use a sequence like this.
 
 ## Table of Data
 
+The entire dataset is defined by a `np.ndarray: (1835, 66, 240)`.
+
 | Coordinates | Body part |
 |:-----------:|:-----------:|
 | 0-2 | Hip |

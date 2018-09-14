@@ -22,7 +22,7 @@ class MocapDataset(Dataset):
     def __getitem__(self, idx):
         joint_positions = self.data[idx][:, :-3]
         ctrl = self.data[idx][:, -3:]
-        return {'j_pos': joint_positions, 'ctrl':ctrl}
+        return {'coord': joint_positions, 'ctrl':ctrl}
 
 
 class MocapSequenceLoader(DataLoader):
@@ -42,7 +42,7 @@ class MocapSequenceLoader(DataLoader):
 
     def __iter__(self):
         for batch in super().__iter__():
-            jpos = batch['j_pos']
+            jpos = batch['coord']
             ctrl = batch['ctrl']
             batch_size, n_frames, n_joints = jpos.shape
 
@@ -57,8 +57,8 @@ class MocapSequenceLoader(DataLoader):
 def get_dataloaders(batch_size=32, root='mocap/data', *args, **kwargs):
     train_dset = MocapDataset(root=root)
     test_dset = MocapDataset(root=root, test=True)
-    train_loader = DataLoader(train_dset, batch_size=32)
-    test_loader = DataLoader(test_dset, batch_size=32)
+    train_loader = DataLoader(train_dset, batch_size=batch_size)
+    test_loader = DataLoader(test_dset, batch_size=batch_size)
     return train_loader, test_loader
 
 
@@ -75,4 +75,3 @@ if __name__ == "__main__":
     print('Control shape: ', c.shape)
     print('Contorl mean: ', c.mean())
     print('Contorl min: {}, max: {} '.format(c.min(), c.max()))
-

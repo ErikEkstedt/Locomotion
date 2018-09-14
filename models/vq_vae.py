@@ -1,12 +1,26 @@
+'''VQ-VAE
+Paper:
+
+
+Work copied from:
+    https://github.com/zalandoresearch/pytorch-vq-vae
+Then changes are made throughout the code for learning and specific application
+purposes.
+
+
+TODO:
+    - Rewrite for 1d
+
+'''
+
 import torch
 import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
 
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 class VectorQuantizer(nn.Module):
-    ''' Implemented by: https://github.com/zalandoresearch/pytorch-vq-vae '''
-
     def __init__(self, num_embeddings, embedding_dim, commitment_cost):
         super(VectorQuantizer, self).__init__()
 
@@ -147,6 +161,7 @@ class ResidualStack(nn.Module):
             x = self._layers[i](x)
         return F.relu(x)
 
+
 class Encoder(nn.Module):
     def __init__(self, in_channels, num_hiddens, num_residual_layers, num_residual_hiddens):
         super(Encoder, self).__init__()
@@ -180,7 +195,7 @@ class Encoder(nn.Module):
 
 
 class Decoder(nn.Module):
-    def __init__(self, in_channels, num_hiddens, num_residual_layers, num_residual_hiddens):
+    def __init__(self, in_channels, out_channels, num_hiddens, num_residual_layers, num_residual_hiddens):
         super(Decoder, self).__init__()
 
         self._conv_1 = nn.Conv2d(in_channels=in_channels,
@@ -199,9 +214,9 @@ class Decoder(nn.Module):
                                                 stride=2, padding=1)
 
         self._conv_trans_2 = nn.ConvTranspose2d(in_channels=num_hiddens//2,
-                                                out_channels=3,
-                                                kernel_size=4,
-                                                stride=2, padding=1)
+                                                out_channels=out_channels,
+                                                kernel_size=(4,6),
+                                                stride=(2,2), padding=1)
 
     def forward(self, inputs):
         x = self._conv_1(inputs)
@@ -215,10 +230,11 @@ class Decoder(nn.Module):
 
 
 class Model(nn.Module):
-    def __init__(self, num_hiddens, num_residual_layers, num_residual_hiddens,
+    def __init__(self, in_channels, out_channels, num_hiddens, num_residual_layers, num_residual_hiddens,
                  num_embeddings, embedding_dim, commitment_cost, decay=0):
         super(Model, self).__init__()
-        self._encoder = Encoder(3, num_hiddens,
+        self._encoder = Encoder(in_channels,
+                                num_hiddens,
                                 num_residual_layers,
                                 num_residual_hiddens)
         self._pre_vq_conv = nn.Conv2d(in_channels=num_hiddens,
@@ -232,6 +248,7 @@ class Model(nn.Module):
             self._vq_vae = VectorQuantizer(num_embeddings, embedding_dim,
                                            commitment_cost)
         self._decoder = Decoder(embedding_dim,
+                                out_channels,
                                 num_hiddens,
                                 num_residual_layers,
                                 num_residual_hiddens)
@@ -244,6 +261,8 @@ class Model(nn.Module):
 
         return loss, x_recon, perplexity
 
+# Todo:
+# Register parameters such that to(device) is done automatically
 
 if __name__ == "__main__":
     from torch.utils.data import DataLoader
@@ -301,7 +320,6 @@ if __name__ == "__main__":
     model = Model(num_hiddens, num_residual_layers, num_residual_hiddens,
                   num_embeddings, embedding_dim,
                   commitment_cost, decay).to(device)
-
     optimizer = optim.Adam(model.parameters(), lr=learning_rate, amsgrad=True)
 
     model.train()
@@ -312,6 +330,7 @@ if __name__ == "__main__":
     for i in trange(num_training_updates):
         # for i, (data, _) in enumerate(training_loader):
         (data, _) = next(iter(training_loader))
+
         data = data.to(device)
         optimizer.zero_grad()
 

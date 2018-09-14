@@ -1,8 +1,8 @@
 import numpy as np
 
-from AnimationPlotLines import animation_plot
+from mocap.AnimationPlotLines import animation_plot
 
-data = np.load('data/edinburgh_locomotion_train.npz')
+data = np.load('mocap/data/edinburgh_locomotion_train.npz')
 
 clips = data['clips']
 clips = np.swapaxes(clips, 1, 2)
